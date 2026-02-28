@@ -5,3 +5,12 @@ data/staging/
 data/curated/
 
 .DS_Store
+
+# Ignore raw data
+data/raw/*
+!data/raw/.gitkeep
+
+# Ignore large processed formats
+data/processed/
+*.parquet
+*.duckdb
