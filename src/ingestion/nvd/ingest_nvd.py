@@ -25,6 +25,7 @@ from urllib.request import Request, urlopen
 
 NVD_BASE_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 DEFAULT_RESULTS_PER_PAGE = 2000
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def parse_args() -> argparse.Namespace:
@@ -45,8 +46,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output-dir",
-        default="data",
-        help="Base output directory (default: data).",
+        default=str(REPO_ROOT / "data"),
+        help="Base output directory (default: <repo>/data).",
     )
     parser.add_argument(
         "--api-key",
@@ -238,11 +239,11 @@ def normalize_all(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def ensure_dirs(base: Path) -> tuple[Path, Path]:
-    raw = base / "raw"
-    processed = base / "processed"
+    raw = base / "raw" / "nvd"
+    staging = base / "staging" / "nvd"
     raw.mkdir(parents=True, exist_ok=True)
-    processed.mkdir(parents=True, exist_ok=True)
-    return raw, processed
+    staging.mkdir(parents=True, exist_ok=True)
+    return raw, staging
 
 
 def write_json(path: Path, data: Any) -> None:
@@ -282,7 +283,7 @@ def write_parquet_if_available(path: Path, rows: list[dict[str, Any]]) -> bool:
 def main() -> int:
     args = parse_args()
     base = Path(args.output_dir)
-    raw_dir, processed_dir = ensure_dirs(base)
+    raw_dir, staging_dir = ensure_dirs(base)
     run_tag = utc_now().strftime("%Y%m%d_%H%M%S")
 
     try:
@@ -306,9 +307,9 @@ def main() -> int:
     normalized = normalize_all(payload)
 
     raw_path = raw_dir / f"nvd_cves_raw_{run_tag}.json"
-    jsonl_path = processed_dir / f"nvd_cves_normalized_{run_tag}.jsonl"
-    csv_path = processed_dir / f"nvd_cves_normalized_{run_tag}.csv"
-    parquet_path = processed_dir / f"nvd_cves_normalized_{run_tag}.parquet"
+    jsonl_path = staging_dir / f"nvd_cves_normalized_{run_tag}.jsonl"
+    csv_path = staging_dir / f"nvd_cves_normalized_{run_tag}.csv"
+    parquet_path = staging_dir / f"nvd_cves_normalized_{run_tag}.parquet"
 
     write_json(raw_path, payload)
     write_jsonl(jsonl_path, normalized)

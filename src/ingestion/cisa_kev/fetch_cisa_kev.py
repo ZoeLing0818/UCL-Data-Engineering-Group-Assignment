@@ -13,6 +13,7 @@ DEFAULT_KEV_URL = (
     "https://www.cisa.gov/sites/default/files/feeds/"
     "known_exploited_vulnerabilities.json"
 )
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def fetch_json(url: str, timeout: int) -> dict:
@@ -42,8 +43,8 @@ def main() -> int:
     parser.add_argument(
         "-o",
         "--output",
-        default="cisa_kev.json",
-        help="Output JSON file path (default: cisa_kev.json)",
+        default=str(REPO_ROOT / "data" / "raw" / "cisa_kev" / "known_exploited_vulnerabilities.json"),
+        help="Output JSON file path (default: <repo>/data/raw/cisa_kev/known_exploited_vulnerabilities.json)",
     )
     parser.add_argument(
         "-t",

@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+
+data/staging/
+data/curated/
+
+.DS_Store
