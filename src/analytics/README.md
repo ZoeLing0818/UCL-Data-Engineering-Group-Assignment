@@ -1,12 +1,12 @@
 # Analytics Layer
 
-這一層可以放：
+This layer can contain:
 
-- DuckDB SQL 查詢
-- 視覺化 notebook
-- dashboard 前處理查詢
+- DuckDB SQL queries
+- visualization notebooks
+- dashboard pre-aggregation queries
 
-目前建議直接讀取：
+Recommended inputs:
 
 - `data/curated/vulnerability_priority/vulnerability_priority_latest.csv`
-- 或 `data/curated/vulnerability_priority/vulnerability_priority_latest.parquet`
+- `data/curated/vulnerability_priority/vulnerability_priority_latest.parquet`

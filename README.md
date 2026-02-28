@@ -1,47 +1,52 @@
 # UCL Data Engineering Group Assignment
 
-這個專案已經整理成比較符合 data engineering 作業流程的結構，方便你往 ingestion、transformation、analytics 三段式發展。
+This project has been reorganized into a structure that better fits a standard data engineering workflow, with clear separation between ingestion, transformation, and analytics.
 
 ## Project Structure
 
 ```text
 .
-├── data
-│   ├── raw
-│   │   ├── cisa_kev
-│   │   ├── epss
-│   │   └── nvd
-│   ├── staging
-│   └── curated
-├── docs
-├── notebooks
-└── src
-    ├── analytics
-    ├── ingestion
-    │   ├── cisa_kev
-    │   └── nvd
-    └── transformation
+|-- data
+|   |-- raw
+|   |   |-- cisa_kev
+|   |   |-- epss
+|   |   `-- nvd
+|   |-- staging
+|   `-- curated
+|-- docs
+|-- notebooks
+|-- sql
+|   `-- postgres
+`-- src
+    |-- analytics
+    |-- ingestion
+    |   |-- cisa_kev
+    |   `-- nvd
+    `-- transformation
 ```
 
 ## Recommended Workflow
 
 1. `data/raw`
-   放 API / feed 原始落地檔，不做欄位修改。
+   Store raw API/feed landing files without changing source fields.
 
 2. `data/staging`
-   放清洗後、可 join 的中間層資料，例如 NVD normalized JSONL / CSV。
+   Store cleaned intermediate datasets that are ready for joins, such as normalized NVD JSONL/CSV.
 
 3. `data/curated`
-   放分析用資料集，例如把 NVD、CISA KEV、EPSS 整併後的 vulnerability mart。
+   Store analytics-ready datasets, such as the vulnerability mart created by combining NVD, CISA KEV, and EPSS.
 
 4. `src/ingestion`
-   放資料抓取程式。
+   Store data ingestion scripts.
 
 5. `src/transformation`
-   放資料清洗、join、特徵整理程式。
+   Store data cleaning, join, and feature engineering scripts.
 
 6. `src/analytics`
-   放 DuckDB / SQL / notebook 查詢邏輯或分析說明。
+   Store DuckDB/SQL queries, notebook logic, or analytics documentation.
+
+7. `sql/postgres`
+   Store PostgreSQL schema, table, and index creation scripts.
 
 ## Current Datasets
 
@@ -52,26 +57,50 @@
 
 ## How To Run
 
-抓最新 NVD：
+Install dependencies:
+
+```bash
+python3 -m pip install -r requirements.txt
+```
+
+Fetch the latest NVD data:
 
 ```bash
 python3 src/ingestion/nvd/ingest_nvd.py --days 30
 ```
 
-抓最新 CISA KEV：
+Fetch the latest CISA KEV data:
 
 ```bash
 python3 src/ingestion/cisa_kev/fetch_cisa_kev.py
 ```
 
-整併成分析資料集：
+Build the curated analytics dataset:
 
 ```bash
 python3 src/transformation/build_vulnerability_mart.py
 ```
 
-## Suggested Next Step For Assignment
+Start MongoDB locally:
 
-- 在 `data/curated` 產出 Parquet，接 DuckDB 做查詢。
-- 補 `notebooks/` 視覺化 CVSS、EPSS、KEV 命中率與時間趨勢。
-- 如果老師要求 orchestration，可以再加 Airflow / Prefect / cron pipeline。
+```bash
+docker compose up -d mongodb
+```
+
+Load raw snapshots into MongoDB:
+
+```bash
+python3 src/storage/mongodb/load_raw_snapshots.py
+```
+
+Default MongoDB settings:
+
+- URI: `mongodb://admin:admin123@localhost:27017/?authSource=admin`
+- database: `cyber_risk_raw`
+
+## Suggested Next Steps
+
+- Output Parquet files in `data/curated` and query them with DuckDB.
+- Add notebooks in `notebooks/` for CVSS, EPSS, KEV hit rate, and trend visualizations.
+- If orchestration is required, add an Airflow, Prefect, or cron-based pipeline.
+- If you need the storage/database owner deliverables, use `docs/storage_architecture.md` and `sql/postgres/`.

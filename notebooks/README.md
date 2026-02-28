@@ -1,3 +1,3 @@
 # Notebooks
 
-這裡可以放 exploratory analysis 或 dashboard prototype notebook。
+This directory can contain exploratory analysis or dashboard prototype notebooks.

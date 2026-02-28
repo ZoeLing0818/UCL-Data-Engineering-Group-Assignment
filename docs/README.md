@@ -1,8 +1,8 @@
 # Docs
 
-這裡可以放：
+This directory can contain:
 
-- 資料來源說明
-- ERD / pipeline flow
-- 作業報告截圖
-- schema 定義
+- data source documentation
+- ERD or pipeline flow diagrams
+- screenshots for the assignment report
+- schema definitions
