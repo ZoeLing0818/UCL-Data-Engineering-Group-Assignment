@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cyber Risk Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./style.css?v=20260304-1" />
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" defer></script>
+    <script src="./app.js?v=20260304-2" defer></script>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">UCL Data Engineering Group Assignment</p>
+          <h1>Cyber Risk Dashboard</h1>
+          <p class="lede">
+            A static GitHub Pages dashboard built on transformed vulnerability datasets
+            from NVD, CISA KEV, EPSS, and cvelistV5.
+          </p>
+        </div>
+        <div class="hero-stats" id="hero-stats">
+          <article class="stat-card">
+            <span class="stat-label">Rows</span>
+            <strong class="stat-value">Loading</strong>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">KEV Rate</span>
+            <strong class="stat-value">Loading</strong>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">High EPSS Groups</span>
+            <strong class="stat-value">Loading</strong>
+          </article>
+        </div>
+      </header>
+
+      <main class="dashboard-grid">
+        <section class="panel panel-wide overview-panel">
+          <div class="panel-header">
+            <h2>Overview</h2>
+            <p>Key summary metrics generated from the current transformed datasets.</p>
+          </div>
+          <div class="overview-grid" id="overview-grid">
+            <article class="overview-card">
+              <span class="overview-label">Total CVEs</span>
+              <strong class="overview-value">Loading</strong>
+              <span class="overview-note">Current curated vulnerability rows</span>
+            </article>
+            <article class="overview-card">
+              <span class="overview-label">Highest-Volume Product</span>
+              <strong class="overview-value">Loading</strong>
+              <span class="overview-note">Most represented vendor/product group</span>
+            </article>
+            <article class="overview-card">
+              <span class="overview-label">Top Average EPSS</span>
+              <strong class="overview-value">Loading</strong>
+              <span class="overview-note">Highest average EPSS product group</span>
+            </article>
+            <article class="overview-card">
+              <span class="overview-label">Most Frequent CWE Group</span>
+              <strong class="overview-value">Loading</strong>
+              <span class="overview-note">Top CWE/vendor/product combination</span>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel panel-wide">
+          <div class="panel-header">
+            <h2>Daily New CVEs</h2>
+            <p>Published CVE counts over time.</p>
+          </div>
+          <div id="daily-new-cves" class="chart"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h2>CVSS Severity Distribution</h2>
+            <p>How vulnerabilities are distributed across severity bands.</p>
+          </div>
+          <div id="cvss-distribution" class="chart"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h2>KEV Hit Rate by Severity</h2>
+            <p>Share of CVEs in KEV for each CVSS severity level.</p>
+          </div>
+          <div id="kev-hit-rate" class="chart"></div>
+        </section>
+
+        <section class="panel panel-wide">
+          <div class="panel-header">
+            <h2>Top Vendor/Product Average EPSS Groups</h2>
+            <p>Vendor-product pairs ranked by average EPSS score, filtered to avoid tiny sample groups.</p>
+          </div>
+          <div id="epss-vendor-product" class="chart"></div>
+        </section>
+
+        <section class="panel panel-wide">
+          <div class="panel-header">
+            <h2>Top CWE, Vendor, Product Aggregations</h2>
+            <p>Grouped vulnerability patterns across weakness, vendor, and product.</p>
+          </div>
+          <div id="cwe-vendor-product" class="chart"></div>
+        </section>
+
+        <section class="panel panel-wide methodology-panel">
+          <div class="panel-header">
+            <h2>Methodology</h2>
+            <p>How the dashboard is produced from the project pipeline.</p>
+          </div>
+          <div class="methodology-copy">
+            <p>
+              This dashboard is built on top of transformed summary datasets generated from four
+              public sources: NVD, CISA KEV, EPSS, and cvelistV5.
+            </p>
+            <p>
+              The pipeline first lands raw source files, then creates a unified vulnerability mart,
+              product bridge tables, official CVE enrichment tables, and reporting summaries.
+            </p>
+            <p>
+              Product-level charts use the CVE-product bridge layer rather than only the flat master
+              table, so the visualisations better reflect many-to-many relationships between CVEs
+              and affected products.
+            </p>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <p>
+          Data source files are generated by the transformation pipeline under
+          <code>data/curated/transformation_summaries</code>.
+        </p>
+      </footer>
+    </div>
+  </body>
+</html>

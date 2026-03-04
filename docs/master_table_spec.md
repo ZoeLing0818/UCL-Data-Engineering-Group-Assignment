@@ -2,6 +2,8 @@
 
 This document is the formal summary deliverable for the `Data Integration Owner` and defines the core integrated master table used in this project.
 
+For the broader project schema, also see [docs/current_schema.md](/Users/bettylin/Documents/UCL-Data-Engineering-Group-Assignment/docs/current_schema.md).
+
 ## Table Overview
 
 - Table name: `vulnerability_priority_latest`
