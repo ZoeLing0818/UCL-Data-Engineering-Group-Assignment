@@ -10,8 +10,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from bson import BSON
 from pymongo import MongoClient
 from pymongo.collection import Collection
+from pymongo.errors import DocumentTooLarge
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -91,6 +93,96 @@ def ensure_indexes(collection: Collection) -> None:
     )
 
 
+def ensure_chunk_indexes(collection: Collection) -> None:
+    collection.create_index("snapshot_date")
+    collection.create_index("ingested_at")
+    collection.create_index(
+        [("source_name", 1), ("file_name", 1), ("chunk_index", 1)],
+        unique=True,
+        name="uniq_source_file_chunk",
+    )
+
+
+def estimate_bson_size(document: dict[str, Any]) -> int:
+    return len(BSON.encode(document))
+
+
+def find_chunkable_key(payload: Any) -> str:
+    if not isinstance(payload, dict):
+        return ""
+    for key in ("data", "vulnerabilities"):
+        if isinstance(payload.get(key), list):
+            return key
+    for key, value in payload.items():
+        if isinstance(value, list):
+            return key
+    return ""
+
+
+def upsert_chunked_payload(
+    collection: Collection,
+    source_name: str,
+    file_path: Path,
+    snapshot_date: str,
+    document: dict[str, Any],
+) -> str:
+    payload = document["payload"]
+    chunk_key = find_chunkable_key(payload)
+    if not chunk_key:
+        raise DocumentTooLarge("Payload is too large and has no chunkable list field")
+
+    rows = payload.get(chunk_key, [])
+    if not isinstance(rows, list):
+        raise DocumentTooLarge("Chunkable payload field is not a list")
+
+    chunk_size = 500
+    chunk_collection = collection.database[f"{collection.name}_chunks"]
+    ensure_chunk_indexes(chunk_collection)
+
+    # Keep a compact metadata document in the main collection.
+    compact_payload = dict(payload)
+    compact_payload[chunk_key] = []
+    compact_payload["_chunked"] = True
+    compact_payload["_chunk_field"] = chunk_key
+    compact_payload["_chunk_count"] = (len(rows) + chunk_size - 1) // chunk_size
+    compact_payload["_record_count"] = len(rows)
+
+    compact_document = dict(document)
+    compact_document["payload"] = compact_payload
+    collection.update_one(
+        {"source_name": source_name, "file_name": file_path.name},
+        {"$set": compact_document},
+        upsert=True,
+    )
+
+    chunk_collection.delete_many({"source_name": source_name, "file_name": file_path.name})
+
+    chunk_docs: list[dict[str, Any]] = []
+    for index in range(0, len(rows), chunk_size):
+        chunk_index = (index // chunk_size) + 1
+        chunk_rows = rows[index : index + chunk_size]
+        chunk_doc = {
+            "source_name": source_name,
+            "file_name": file_path.name,
+            "snapshot_date": snapshot_date,
+            "ingested_at": document["ingested_at"],
+            "chunk_field": chunk_key,
+            "chunk_index": chunk_index,
+            "chunk_total": compact_payload["_chunk_count"],
+            "payload_chunk": chunk_rows,
+        }
+        # Safety guard in case rows are unexpectedly large.
+        if estimate_bson_size(chunk_doc) > 15_000_000:
+            raise DocumentTooLarge(
+                f"Chunk document is too large for {file_path.name}; reduce chunk_size."
+            )
+        chunk_docs.append(chunk_doc)
+
+    if chunk_docs:
+        chunk_collection.insert_many(chunk_docs)
+    return "chunked"
+
+
 def upsert_snapshot(
     collection: Collection,
     source_name: str,
@@ -107,11 +199,14 @@ def upsert_snapshot(
         "payload": payload,
     }
 
-    result = collection.update_one(
-        {"source_name": source_name, "file_name": file_path.name},
-        {"$set": document},
-        upsert=True,
-    )
+    try:
+        result = collection.update_one(
+            {"source_name": source_name, "file_name": file_path.name},
+            {"$set": document},
+            upsert=True,
+        )
+    except DocumentTooLarge:
+        return upsert_chunked_payload(collection, source_name, file_path, snapshot_date, document)
 
     if result.upserted_id is not None:
         return "inserted"
@@ -146,6 +241,7 @@ def main() -> int:
     inserted = 0
     updated = 0
     unchanged = 0
+    chunked = 0
 
     try:
         client.admin.command("ping")
@@ -157,16 +253,19 @@ def main() -> int:
                 inserted += 1
             elif status == "updated":
                 updated += 1
+            elif status == "chunked":
+                chunked += 1
             else:
                 unchanged += 1
             print(f"{status:9} {collection_name}: {file_path.name}")
     finally:
         client.close()
 
-    total = inserted + updated + unchanged
+    total = inserted + updated + unchanged + chunked
     print(f"Processed snapshots: {total}")
     print(f"Inserted: {inserted}")
     print(f"Updated: {updated}")
+    print(f"Chunked: {chunked}")
     print(f"Unchanged: {unchanged}")
     print(f"Database: {args.database}")
     return 0
