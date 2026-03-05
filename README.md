@@ -112,6 +112,22 @@ python3 src/transformation/build_transformation_summaries.py
 python3 src/analytics/duckdb/load_duckdb.py
 ```
 
+Run DuckDB analytics query pack (`sql/duckdb/queries.sql`, 14 queries):
+
+```bash
+python3 - <<'PY'
+import duckdb
+from pathlib import Path
+
+con = duckdb.connect("data/analytics.duckdb")
+sql = Path("sql/duckdb/queries.sql").read_text(encoding="utf-8")
+for i, stmt in enumerate([s.strip() for s in sql.split(";") if s.strip()], 1):
+    print(f"\n--- Query {i} ---")
+    print(con.execute(stmt).fetchdf().head(20).to_string(index=False))
+con.close()
+PY
+```
+
 6. Start API and dashboard
 
 ```bash
@@ -127,6 +143,14 @@ Open:
 - Dashboard (API mode): `http://127.0.0.1:8000/dashboard/?api_base=http://127.0.0.1:8001`
 - API health: `http://127.0.0.1:8001/health`
 - API docs: `http://127.0.0.1:8001/docs`
+
+## Current Progress
+
+- Step 1 (Data Integration Owner): completed
+- Step 2 (Storage / Database Owner): completed
+- Step 3 (Transformation / PySpark Owner): completed (Spark from MongoDB plus curated outputs)
+- Step 4 (Analytics / Query Owner): completed (DuckDB query pack + FastAPI + dashboard API mode)
+- Step 5 (Engineering / Documentation Owner): in progress
 
 ## Notes
 
