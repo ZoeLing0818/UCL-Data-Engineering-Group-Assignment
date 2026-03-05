@@ -92,15 +92,70 @@ function formatPercent(value) {
   return `${(value * 100).toFixed(1)}%`;
 }
 
-function buildHeroStats(dailyRows, kevRows, epssRows) {
+function normalizeLabel(value, fallback = "unknown") {
+  const text = String(value ?? "").trim().toLowerCase();
+  if (!text) {
+    return fallback;
+  }
+  return text;
+}
+
+function parseDateValue(value) {
+  if (!value) {
+    return null;
+  }
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatLocalDate(date) {
+  if (!date) {
+    return "";
+  }
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function rollingAverage(values, windowSize) {
+  const output = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const start = Math.max(0, index - windowSize + 1);
+    const window = values.slice(start, index + 1);
+    const avg = window.reduce((sum, value) => sum + value, 0) / window.length;
+    output.push(avg);
+  }
+  return output;
+}
+
+function filterDailyByRange(rows, startDate, endDate) {
+  return rows.filter((row) => {
+    const rowDate = parseDateValue(row.published_date);
+    if (!rowDate) {
+      return false;
+    }
+    if (startDate && rowDate < startDate) {
+      return false;
+    }
+    if (endDate && rowDate > endDate) {
+      return false;
+    }
+    return true;
+  });
+}
+
+function buildHeroStats(dailyRows, kevRows, epssRows, minScoredCves) {
   const totalNewCves = dailyRows.reduce((sum, row) => sum + toNumber(row.new_cve_count), 0);
   const totalCves = kevRows.reduce((sum, row) => sum + toNumber(row.total_cves), 0);
   const totalKev = kevRows.reduce((sum, row) => sum + toNumber(row.kev_cves), 0);
-  const highRiskGroups = epssRows.filter((row) => toNumber(row.high_epss_cves) > 0).length;
+  const highRiskGroups = epssRows.filter(
+    (row) => toNumber(row.scored_cves) >= minScoredCves && toNumber(row.high_epss_cves) > 0
+  ).length;
   const stats = [
-    { label: "CVE Rows", value: totalNewCves.toLocaleString() },
+    { label: "CVE Rows (Range)", value: totalNewCves.toLocaleString() },
     { label: "KEV Rate", value: formatPercent(totalKev / Math.max(totalCves, 1)) },
-    { label: "High EPSS Groups", value: highRiskGroups.toLocaleString() },
+    { label: `High EPSS Groups (>=${minScoredCves})`, value: highRiskGroups.toLocaleString() },
   ];
 
   document.getElementById("hero-stats").innerHTML = stats
@@ -115,12 +170,13 @@ function buildHeroStats(dailyRows, kevRows, epssRows) {
     .join("");
 }
 
-function buildOverviewCards(dailyRows, epssRows, cweRows) {
+function buildOverviewCards(dailyRows, epssRows, cweRows, minScoredCves) {
   const totalCves = dailyRows.reduce((sum, row) => sum + toNumber(row.new_cve_count), 0);
-  const topProductRow = [...epssRows].sort(
+  const epssFilteredRows = epssRows.filter((row) => toNumber(row.scored_cves) >= minScoredCves);
+  const topProductRow = [...epssFilteredRows].sort(
     (left, right) => toNumber(right.total_cves) - toNumber(left.total_cves)
   )[0];
-  const topAverageEpssRow = [...epssRows]
+  const topAverageEpssRow = [...epssFilteredRows]
     .filter((row) => toNumber(row.avg_epss_score) > 0)
     .sort((left, right) => toNumber(right.avg_epss_score) - toNumber(left.avg_epss_score))[0];
   const topCweRow = [...cweRows].sort(
@@ -140,7 +196,7 @@ function buildOverviewCards(dailyRows, epssRows, cweRows) {
         : "N/A",
       note: topProductRow
         ? `${toNumber(topProductRow.total_cves).toLocaleString()} CVEs in this group`
-        : "No product grouping available",
+        : "No product grouping available after current filter",
     },
     {
       label: "Top Average EPSS",
@@ -149,7 +205,7 @@ function buildOverviewCards(dailyRows, epssRows, cweRows) {
         : "N/A",
       note: topAverageEpssRow
         ? `Average EPSS ${toNumber(topAverageEpssRow.avg_epss_score).toFixed(4)}`
-        : "No EPSS grouping available",
+        : "No EPSS grouping available after current filter",
     },
     {
       label: "Most Frequent CWE Group",
@@ -175,13 +231,66 @@ function buildOverviewCards(dailyRows, epssRows, cweRows) {
     .join("");
 }
 
+function buildQualityCards(cvssRows, epssRows, cweRows) {
+  const totalCvssRows = cvssRows.reduce((sum, row) => sum + toNumber(row.cve_count), 0);
+  const unknownSeverityRows = cvssRows
+    .filter((row) => normalizeLabel(row.cvss_severity, "unknown") === "unknown")
+    .reduce((sum, row) => sum + toNumber(row.cve_count), 0);
+
+  const totalProductLinks = epssRows.reduce((sum, row) => sum + toNumber(row.total_cves), 0);
+  const unknownProductLinks = epssRows
+    .filter((row) => {
+      const vendor = normalizeLabel(row.vendor);
+      const product = normalizeLabel(row.product);
+      return vendor === "unknown" || product === "unknown";
+    })
+    .reduce((sum, row) => sum + toNumber(row.total_cves), 0);
+
+  const totalCweLinks = cweRows.reduce((sum, row) => sum + toNumber(row.cve_count), 0);
+  const knownCweLinks = cweRows
+    .filter((row) => String(row.cwe_id || "").startsWith("CWE-"))
+    .reduce((sum, row) => sum + toNumber(row.cve_count), 0);
+
+  const cards = [
+    {
+      label: "Unknown Severity Rate",
+      value: formatPercent(unknownSeverityRows / Math.max(totalCvssRows, 1)),
+      note: `${unknownSeverityRows.toLocaleString()} of ${totalCvssRows.toLocaleString()} severity rows`,
+    },
+    {
+      label: "Unknown Vendor/Product Share",
+      value: formatPercent(unknownProductLinks / Math.max(totalProductLinks, 1)),
+      note: `${unknownProductLinks.toLocaleString()} of ${totalProductLinks.toLocaleString()} aggregated links`,
+    },
+    {
+      label: "CWE Coverage",
+      value: formatPercent(knownCweLinks / Math.max(totalCweLinks, 1)),
+      note: `${knownCweLinks.toLocaleString()} of ${totalCweLinks.toLocaleString()} grouped links mapped to CWE`,
+    },
+  ];
+
+  document.getElementById("quality-grid").innerHTML = cards
+    .map(
+      (card) => `
+        <article class="overview-card">
+          <span class="overview-label">${card.label}</span>
+          <strong class="overview-value">${card.value}</strong>
+          <span class="overview-note">${card.note}</span>
+        </article>
+      `
+    )
+    .join("");
+}
+
 function renderDailyNewCves(rows) {
+  const dailyCounts = rows.map((row) => toNumber(row.new_cve_count));
+  const movingAvg = rollingAverage(dailyCounts, 7);
   Plotly.newPlot(
     "daily-new-cves",
     [
       {
         x: rows.map((row) => row.published_date),
-        y: rows.map((row) => toNumber(row.new_cve_count)),
+        y: dailyCounts,
         type: "scatter",
         mode: "lines+markers",
         line: { color: COLORS.green, width: 3 },
@@ -189,8 +298,20 @@ function renderDailyNewCves(rows) {
         fill: "tozeroy",
         fillcolor: "rgba(31,107,82,0.12)",
       },
+      {
+        x: rows.map((row) => row.published_date),
+        y: movingAvg,
+        type: "scatter",
+        mode: "lines",
+        line: { color: COLORS.slate, width: 3, dash: "dash" },
+        name: "7-day MA",
+      },
     ],
-    baseLayout("New CVEs"),
+    {
+      ...baseLayout("New CVEs (Daily + 7-day MA)"),
+      showlegend: true,
+      legend: { orientation: "h", x: 0, y: 1.14 },
+    },
     { responsive: true, displayModeBar: false }
   );
 }
@@ -237,7 +358,7 @@ function renderKevHitRate(rows) {
 
 function renderEpssVendorProduct(rows) {
   const topRows = rows
-    .filter((row) => toNumber(row.scored_cves) >= 2)
+    .filter((row) => toNumber(row.scored_cves) > 0)
     .filter((row) => toNumber(row.avg_epss_score) > 0)
     .sort((left, right) => toNumber(right.avg_epss_score) - toNumber(left.avg_epss_score))
     .slice(0, 12);
@@ -319,6 +440,77 @@ function baseLayout(title) {
   };
 }
 
+function initializeFilters(dailyRows) {
+  const startInput = document.getElementById("filter-start-date");
+  const endInput = document.getElementById("filter-end-date");
+  const resetButton = document.getElementById("filter-reset");
+
+  const sortedDates = dailyRows
+    .map((row) => row.published_date)
+    .filter((value) => parseDateValue(value))
+    .sort();
+
+  if (sortedDates.length > 0) {
+    startInput.value = sortedDates[0];
+    endInput.value = sortedDates[sortedDates.length - 1];
+    startInput.min = sortedDates[0];
+    startInput.max = sortedDates[sortedDates.length - 1];
+    endInput.min = sortedDates[0];
+    endInput.max = sortedDates[sortedDates.length - 1];
+  }
+
+  resetButton.addEventListener("click", () => {
+    if (sortedDates.length > 0) {
+      startInput.value = sortedDates[0];
+      endInput.value = sortedDates[sortedDates.length - 1];
+    }
+    document.getElementById("filter-min-scored").value = "2";
+    renderDashboard();
+  });
+
+  startInput.addEventListener("change", renderDashboard);
+  endInput.addEventListener("change", renderDashboard);
+  document.getElementById("filter-min-scored").addEventListener("change", renderDashboard);
+}
+
+let dashboardData = null;
+
+function renderDashboard() {
+  if (!dashboardData) {
+    return;
+  }
+
+  const { dailyRows, cvssRows, kevRows, epssRows, cweRows } = dashboardData;
+  const startDate = parseDateValue(document.getElementById("filter-start-date").value);
+  const endDate = parseDateValue(document.getElementById("filter-end-date").value);
+  const minScoredCves = Math.max(1, toNumber(document.getElementById("filter-min-scored").value));
+
+  let effectiveStart = startDate;
+  let effectiveEnd = endDate;
+  if (effectiveStart && effectiveEnd && effectiveStart > effectiveEnd) {
+    const temp = effectiveStart;
+    effectiveStart = effectiveEnd;
+    effectiveEnd = temp;
+  }
+
+  const filteredDaily = filterDailyByRange(dailyRows, effectiveStart, effectiveEnd);
+  const epssMinFiltered = epssRows.filter((row) => toNumber(row.scored_cves) >= minScoredCves);
+
+  buildHeroStats(filteredDaily, kevRows, epssRows, minScoredCves);
+  buildOverviewCards(filteredDaily, epssRows, cweRows, minScoredCves);
+  buildQualityCards(cvssRows, epssRows, cweRows);
+  renderDailyNewCves(filteredDaily);
+  renderCvssDistribution(cvssRows);
+  renderKevHitRate(kevRows);
+  renderEpssVendorProduct(epssMinFiltered);
+  renderCweVendorProduct(cweRows);
+
+  const summary = document.getElementById("filter-summary");
+  const startLabel = effectiveStart ? formatLocalDate(effectiveStart) : "min";
+  const endLabel = effectiveEnd ? formatLocalDate(effectiveEnd) : "max";
+  summary.textContent = `Date range: ${startLabel} to ${endLabel} | EPSS groups require scored_cves >= ${minScoredCves}`;
+}
+
 async function bootstrap() {
   try {
     const [dailyRows, cvssRows, kevRows, epssRows, cweRows] = await Promise.all([
@@ -329,13 +521,9 @@ async function bootstrap() {
       fetchRows("cwe"),
     ]);
 
-    buildHeroStats(dailyRows, kevRows, epssRows);
-    buildOverviewCards(dailyRows, epssRows, cweRows);
-    renderDailyNewCves(dailyRows);
-    renderCvssDistribution(cvssRows);
-    renderKevHitRate(kevRows);
-    renderEpssVendorProduct(epssRows);
-    renderCweVendorProduct(cweRows);
+    dashboardData = { dailyRows, cvssRows, kevRows, epssRows, cweRows };
+    initializeFilters(dailyRows);
+    renderDashboard();
   } catch (error) {
     document.querySelector(".dashboard-grid").innerHTML = `
       <section class="panel panel-wide">

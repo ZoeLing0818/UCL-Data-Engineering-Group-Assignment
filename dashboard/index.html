@@ -12,7 +12,7 @@
     />
     <link rel="stylesheet" href="./style.css?v=20260304-1" />
     <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" defer></script>
-    <script src="./app.js?v=20260305-1" defer></script>
+    <script src="./app.js?v=20260305-2" defer></script>
   </head>
   <body>
     <div class="page-shell">
@@ -42,6 +42,31 @@
       </header>
 
       <main class="dashboard-grid">
+        <section class="panel panel-wide filter-panel">
+          <div class="panel-header">
+            <h2>Global Controls</h2>
+            <p>Adjust date range and minimum sample threshold for grouped EPSS views.</p>
+          </div>
+          <div class="filter-grid">
+            <label class="filter-field">
+              <span>Start Date</span>
+              <input id="filter-start-date" type="date" />
+            </label>
+            <label class="filter-field">
+              <span>End Date</span>
+              <input id="filter-end-date" type="date" />
+            </label>
+            <label class="filter-field">
+              <span>Min Scored CVEs (EPSS)</span>
+              <input id="filter-min-scored" type="number" min="1" step="1" value="2" />
+            </label>
+          </div>
+          <div class="filter-actions">
+            <button id="filter-reset" type="button">Reset Filters</button>
+            <span id="filter-summary">Loading filter context...</span>
+          </div>
+        </section>
+
         <section class="panel panel-wide overview-panel">
           <div class="panel-header">
             <h2>Overview</h2>
@@ -74,9 +99,33 @@
         <section class="panel panel-wide">
           <div class="panel-header">
             <h2>Daily New CVEs</h2>
-            <p>Published CVE counts over time.</p>
+            <p>Published CVE counts over time with 7-day moving average.</p>
           </div>
           <div id="daily-new-cves" class="chart"></div>
+        </section>
+
+        <section class="panel panel-wide">
+          <div class="panel-header">
+            <h2>Data Quality Snapshot</h2>
+            <p>Coverage and unknown-rate indicators from transformed analytics tables.</p>
+          </div>
+          <div class="quality-grid" id="quality-grid">
+            <article class="overview-card">
+              <span class="overview-label">Unknown Severity Rate</span>
+              <strong class="overview-value">Loading</strong>
+              <span class="overview-note">Based on CVSS severity distribution.</span>
+            </article>
+            <article class="overview-card">
+              <span class="overview-label">Unknown Vendor/Product Share</span>
+              <strong class="overview-value">Loading</strong>
+              <span class="overview-note">Based on EPSS vendor-product aggregation links.</span>
+            </article>
+            <article class="overview-card">
+              <span class="overview-label">CWE Coverage</span>
+              <strong class="overview-value">Loading</strong>
+              <span class="overview-note">Share of grouped rows with mapped CWE identifiers.</span>
+            </article>
+          </div>
         </section>
 
         <section class="panel">
